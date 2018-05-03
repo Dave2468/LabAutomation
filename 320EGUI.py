@@ -1,5 +1,6 @@
 from Tkinter import* 
 import visa
+import os
 import time
 import csv
 import random
@@ -17,6 +18,17 @@ import matplotlib.animation as ani
 import matplotlib.pyplot as plt
 from multiprocessing import Process, Value, Array
 #Starts the whole shebang, without initializing nothing else starts because of StartedProgram bit
+
+class MyClass(object):
+    def __init__(self):
+        self.p = Process(target=PrintCrap)
+    def fun1(self):
+        self.p.start()
+
+    def fun2(self):
+        self.p.terminate()
+
+
 def Initialize():
 	global StartedProgram
 	try:
@@ -53,7 +65,11 @@ def RefreshScale():
 def RefreshDevice():
 	Devices=rm.list_resources()
 	lbl2.configure(text=Devices)
-
+'''
+def CallRecord():
+	#Just pass the filename
+	p=Process(target=RecordData).start()
+'''
 def RecordData():
 	global StartedProgram
 	if (StartedProgram==1):
@@ -73,6 +89,7 @@ def RecordData():
 		Clk=[]
 		i = 0
 		#Loop where we iterate over the specified time period
+		#All of this needs to be put into a seperate Process
 		while (time.time() < StopTime):
 			#Here we take in measurements and push them to an array
 			power1=str(my_instrument.query(':POW1:VAL?'))
@@ -125,19 +142,54 @@ def UpdateLiveValues():
 		window.after(30,UpdateLiveValues)
 #Trying to add, start ands stop, problem is program hang while in loop, need process ?
 #Start CSV writing process inside of here?
-def StartStopRecord():
+def StartStopRecord(Variable):
 	global StartedProgram
-	if (StartedProgram==1):
-		TimeStart= time.clock()
-		TimeElapsed= time.clock()-TimeStart
-		lbl10.configure(text=TimeElapsed)
-		window.after(30,StartStopRecord)
+	WritingThread=threading.Thread(target=PrintCrap)
+	i = 0 
+	if (Variable==0):
+		print("starting thread")
+		lbl11.configure(text="WRT")
+		WritingThread.start()
 
+def ChangeText():
+	lbl11.configure(text="STP")
+
+def PrintCrap():
+	i=0
+	timeStart=time.time()
+	while(i == 0):
+		#Printing the number of active threads
+		print(threading.active_count())
+		timeElapsed=time.time()-timeStart
+		timeElapsed=round(timeElapsed,3)
+		lbl10.configure(text=timeElapsed)
+		time.sleep(.5)
+		if (lbl11["text"]=="STP"):
+			print("EXITED THREAD")
+			i = 1
+			lbl10.configure(text="0")
+
+'''
+def PrintCrap():
+	global ConditionLoop
+	while(True):
+		if (ConditionLoop==0):
+			print("hello world")
+			time.sleep(.5)
+		elif(ConditionLoop==1):
+			print("TRIED TO STOP THE MADNESS")
+			time.sleep(.5)
+			'''
 def Exit():
-	sys.exit(0)
-
+	#Locking user from exiting if there are threads running
+	if(lbl11["text"]=="STP"):
+			#Should be one active thread
+			print(threading.active_count())
+			print("Closing")
+			sys.exit(0)
 
 #Globals for animation 
+global ani
 global x
 x = 0 
 global Y1array
@@ -147,8 +199,8 @@ Y2array=[]
 global StartedProgram
 StartedProgram=0
 
-global StartStopFunctionality
-StartStopFunctionality=0
+
+
 
 rm = visa.ResourceManager()
 window=Tk()
@@ -159,7 +211,7 @@ height=height
 tot=str(width)+"x"+str(height)
 WidgFrame=Tkinter.Frame(window,bg='grey',relief="ridge",bd='4')
 WidgFrame.grid(column=0,row=0,sticky='w')
-window.geometry("850x500")
+window.geometry("900x500")
 window.title("PM320E")
 lbl1= Label(WidgFrame,font =("Arial Bold",15), text='Connected Devices',bg='grey')
 lbl1.grid(column=0,row =0,sticky='w',columnspan=15)
@@ -229,35 +281,43 @@ ani = ani.FuncAnimation(fig, animate, interval=2000)
 
 
 #These get updated with value of PM320E channel reading
-ValueFrame=Tkinter.Frame(window,bg='grey',relief="ridge",bd='3',height="25")
-ValueFrame.grid(column=0,row=5,sticky='w',rowspan="100",columnspan="15")
+ValueFrame=Tkinter.Frame(window,bg='grey',relief="ridge",bd='3')
+ValueFrame.grid(column=0,row=10,sticky='w',rowspan="100",columnspan="15")
 #Channel1
-lbl6Name= Label(ValueFrame,font =("Arial Bold",35),text="Ch1:",bg="grey")
+lbl6Name= Label(ValueFrame,font =("Arial Bold",28),text="Ch1:",bg="grey")
 lbl6Name.grid(column=0,row=0,sticky='w')
-lbl6= Label(ValueFrame,font =("Arial Bold",35),bg="grey")
-lbl6.grid(column=1,row=0,sticky='w')
+lbl6= Label(ValueFrame,font =("Arial Bold",28),bg="grey")
+lbl6.grid(column=1,row=0,sticky='w',padx="160")
 #Channel2
-lbl7Name= Label(ValueFrame,font =("Arial Bold",35),text="Ch2:",bg="grey")
+lbl7Name= Label(ValueFrame,font =("Arial Bold",28),text="Ch2:",bg="grey")
 lbl7Name.grid(column=0,row=1,sticky='w')
-lbl7= Label(ValueFrame,font =("Arial Bold",35),bg="grey")
+lbl7= Label(ValueFrame,font =("Arial Bold",28),bg="grey")
 lbl7.grid(column=1,row=1,sticky='w')
 
 
 #Manual start stop portion
-lbl8= Label(WidgFrame,font =("Arial Bold",15),text='Manual Start/Stop',bg='grey')
+StartStopFrame=Tkinter.Frame(WidgFrame,bg='grey',relief="ridge",bd='3')
+StartStopFrame.grid(column=0,row=12,sticky='w',rowspan="100",columnspan="15")
+lbl8= Label(StartStopFrame,font =("Arial Bold",15),text='Manual Start/Stop',bg='grey')
 lbl8.grid(column=0,row=12,sticky='w')
-btn3 = Tkinter.Button(master=WidgFrame, text='Start/Stop', command=StartStopRecord,bg='grey')
-btn3.grid(column=1,row=12)
-lbl9= Label(WidgFrame,font =("Arial Bold",15),text='Elapsed Time',bg='grey')
+btn3 = Tkinter.Button(master=StartStopFrame, text='Start', command=lambda:StartStopRecord(0),bg='grey')
+btn3.grid(column=1,row=12,padx='30')
+btn4 = Tkinter.Button(master=StartStopFrame, text='Stop', command=ChangeText,bg='grey')
+btn4.grid(column=3,row=12,padx="30")
+lbl9= Label(StartStopFrame,font =("Arial Bold",15),text='Elapsed Time',bg='grey')
 lbl9.grid(column=0,row=13,sticky='w')
-lbl10= Label(WidgFrame,font =("Arial Bold",15),bg='grey')
+lbl10= Label(StartStopFrame,font =("Arial Bold",15),bg='grey',width="15")
 lbl10.grid(column=1,row=13,sticky='w')
 
+lbl11= Label(StartStopFrame,font =("Arial Bold",15),bg='grey',width="5")
+lbl11.grid(column=2,row=12,sticky='w')
+
 #Here is the quit button
-btn10 = Tkinter.Button(master=WidgFrame, text='Quit', command=Exit,bg='grey')
+btn10 = Tkinter.Button(master=StartStopFrame, text='Quit', command=Exit,bg='grey')
 btn10.grid(column=i+0,row=14)
 window.configure(background="grey")
 window.mainloop()
+
 
 
 
